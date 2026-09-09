@@ -62,7 +62,7 @@ const quotaPageHTML = `<!doctype html>
       try { resolve(JSON.parse(data.body)); } catch (_) { reject(new Error('Quota response was not valid JSON')); }
     };
     window.addEventListener('message', onMessage);
-    parent.postMessage({type:REQUEST,version:1,requestId,method:'GET',path:'/v0/management/plugins/kiro/usage',headers:{accept:'application/json'}}, location.origin);
+    parent.postMessage({type:REQUEST,version:1,requestId,method:'GET',path:'/v0/management/plugins/kiro/usage',headers:{accept:'application/json'}}, '*');
   });
   const rowsFor = usage => Array.isArray(usage?.usageBreakdownList) ? usage.usageBreakdownList : [];
   const render = report => {
