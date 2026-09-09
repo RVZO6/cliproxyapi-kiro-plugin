@@ -14,6 +14,11 @@ import (
 // Kiro usage limits. Relative form; the host resolves it under the base prefix.
 const usageRoutePath = "kiro-usage"
 
+const (
+	scopedUsageRoutePath = "plugins/kiro/usage"
+	quotaResourcePath    = "quota"
+)
+
 // managementRoute mirrors pluginapi.ManagementRoute on the wire (PascalCase, no
 // Handler — the host attaches its own adapter and calls back via management.handle).
 type managementRoute struct {
@@ -25,7 +30,14 @@ type managementRoute struct {
 
 // managementRegistrationResult mirrors the host's rpcManagementRegistrationResponse.
 type managementRegistrationResult struct {
-	Routes []managementRoute `json:"routes,omitempty"`
+	Routes    []managementRoute `json:"routes,omitempty"`
+	Resources []resourceRoute   `json:"resources,omitempty"`
+}
+
+type resourceRoute struct {
+	Path        string
+	Menu        string
+	Description string
 }
 
 // managementHandleRequest mirrors the host's rpcManagementRequest: the embedded
@@ -44,6 +56,18 @@ func registerManagement() ([]byte, error) {
 				Path:        usageRoutePath,
 				Description: "Report Kiro getUsageLimits for all kiro credentials (optional ?auth=<auth_index|name>).",
 			},
+			{
+				Method:      http.MethodGet,
+				Path:        scopedUsageRoutePath,
+				Description: "Report Kiro usage to the plugin resource bridge.",
+			},
+		},
+		Resources: []resourceRoute{
+			{
+				Path:        quotaResourcePath,
+				Menu:        "Kiro Quota",
+				Description: "View Kiro subscription credit usage and reset dates.",
+			},
 		},
 	})
 }
@@ -57,8 +81,13 @@ func handleManagement(request []byte) ([]byte, error) {
 	}
 
 	// Match by path suffix so both the relative and fully-resolved forms work.
-	if strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(strings.TrimRight(req.Path, "/"), usageRoutePath) {
+	path := strings.TrimRight(req.Path, "/")
+	if strings.EqualFold(req.Method, http.MethodGet) &&
+		(strings.HasSuffix(path, usageRoutePath) || strings.HasSuffix(path, scopedUsageRoutePath)) {
 		return wire.OK(handleUsageLimits(req.HostCallbackID, req.Query))
+	}
+	if strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/"+quotaResourcePath) {
+		return wire.OK(quotaPageResponse())
 	}
 
 	return wire.OK(pluginapi.ManagementResponse{
