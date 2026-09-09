@@ -23,6 +23,9 @@ const (
 // kiroModelIDs are the client-facing model names retained by the legacy fixed-list
 // helper for compatibility with existing callers.
 var kiroModelIDs = []string{
+	"gpt-5.6-sol",
+	"gpt-5.6-terra",
+	"gpt-5.6-luna",
 	"claude-opus-5",
 	"claude-opus-4-8",
 	"claude-opus-4-7",
@@ -33,6 +36,11 @@ var kiroModelIDs = []string{
 	"claude-sonnet-4-5",
 	"claude-sonnet-4-0",
 	"claude-haiku-4-5",
+	"deepseek-3.2",
+	"minimax-m2.5",
+	"glm-5",
+	"minimax-m2.1",
+	"qwen3-coder-next",
 }
 
 // modelMapping translates a client-facing model name to the CodeWhisperer-native
@@ -157,14 +165,10 @@ type tokenLimits struct {
 // The management endpoint is account-scoped by accessToken/profileArn, so when
 // it answers we advertise exactly what it returns.
 //
-// Graceful degradation: ListAvailableModels hard-requires a valid profileArn,
-// which AWS Builder ID (free tier) accounts do not have and cannot discover
-// (ListAvailableProfiles returns AccessDenied for them). Chat still works for
-// those accounts without a profileArn, so instead of returning an error — which
-// makes the host UNREGISTER every model for this auth and surfaces as "no models
-// bound" — we fall back to the static catalog. Per-account availability is still
-// enforced upstream at chat time (INVALID_MODEL_ID), consistent with the
-// modelMapping design note above.
+// Graceful degradation: when account-scoped discovery fails, fall back to the
+// static catalog rather than returning an error, which would make the host
+// unregister every model for this auth. AWS Builder ID accounts do not have a
+// profileArn, so let ListAvailableModels decide whether an omitted field is valid.
 func kiroModelsForAuth(request []byte) ([]byte, error) {
 	var req authModelRequest
 	if errUnmarshal := json.Unmarshal(request, &req); errUnmarshal != nil {
@@ -185,18 +189,12 @@ func kiroModelsForAuth(request []byte) ([]byte, error) {
 		return staticModelsEnvelope()
 	}
 
-	// ListAvailableModels hard-requires a valid profileArn. IdC / organization
-	// accounts have one but the device-code login never captured it, so discover
-	// it now via ListAvailableProfiles. AWS Builder ID accounts are not authorized
-	// for that call (AccessDenied) and yield "", so we advertise the static catalog
-	// instead — their chat works fine without a profileArn, and per-account
-	// availability is enforced upstream at chat time (INVALID_MODEL_ID).
+	// IdC / organization accounts require a profileArn, so discover it when the
+	// device-code login did not capture one. Builder ID accounts are not authorized
+	// for ListAvailableProfiles, so try ListAvailableModels with the field omitted.
 	profileArn := strings.TrimSpace(cred.ProfileArn)
 	if profileArn == "" {
 		profileArn = discoverProfileArn(cred, req.HostCallbackID, region)
-	}
-	if profileArn == "" {
-		return staticModelsEnvelope()
 	}
 
 	body, errMarshal := json.Marshal(listAvailableModelsRequest{
