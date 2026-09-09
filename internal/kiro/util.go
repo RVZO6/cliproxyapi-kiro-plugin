@@ -12,7 +12,7 @@ import (
 // kiroVersion is the KiroIDE client version advertised in AWS user-agent headers.
 // Upstream is sensitive to this value; bumping it may break access until a new
 // endpoint/version pairing is found.
-const kiroVersion = "0.11.63"
+const kiroVersion = "0.11.107"
 
 // uuidV4 returns a random RFC 4122 version-4 UUID string.
 func uuidV4() string {
