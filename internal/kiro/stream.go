@@ -20,16 +20,15 @@ type executorStreamChunk struct {
 }
 
 // buildClaudeStreamChunks renders aggregated text + tool calls as a standard
-// Claude Messages SSE sequence, one SSE event per chunk:
+// Claude Messages SSE sequence, with event and data lines in separate chunks:
 // message_start → (content_block_start/delta/stop)* → message_delta → message_stop.
 func buildClaudeStreamChunks(text string, calls []toolCall, model string, inputTokens int) []executorStreamChunk {
-	chunks := make([]executorStreamChunk, 0, 8)
+	chunks := make([]executorStreamChunk, 0, 16)
 	add := func(event string, data any) {
 		body, _ := json.Marshal(data)
+		chunks = append(chunks, executorStreamChunk{Payload: []byte("event: " + event + "\n")})
 		var sb strings.Builder
-		sb.WriteString("event: ")
-		sb.WriteString(event)
-		sb.WriteString("\ndata: ")
+		sb.WriteString("data: ")
 		sb.Write(body)
 		sb.WriteString("\n\n")
 		chunks = append(chunks, executorStreamChunk{Payload: []byte(sb.String())})
