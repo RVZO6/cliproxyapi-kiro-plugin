@@ -51,6 +51,16 @@ func HandleMethod(method string, request []byte) ([]byte, error) {
 		pluginabi.MethodExecutorHTTPRequest:
 		return wire.ErrorStatus("not_implemented", "count-tokens/http-request are not implemented yet", http.StatusNotImplemented), nil
 
+	// ---- native quota provider ----
+	case "quota.identifier":
+		return wire.OK(identifierResponse{Identifier: providerKiro})
+	case "quota.describe":
+		return wire.OK(map[string]any{"supported_providers": []string{providerKiro}, "display_name": "Kiro", "supports_reset": false})
+	case "quota.fetch":
+		return fetchQuota(request)
+	case "quota.reset":
+		return wire.ErrorStatus("not_supported", "Kiro quota cannot be reset by this plugin", http.StatusNotImplemented), nil
+
 	// ---- management API ----
 	case pluginabi.MethodManagementRegister:
 		return registerManagement()
@@ -84,6 +94,7 @@ func kiroRegistration() registration {
 			ExecutorInputFormats:  []string{"claude"},
 			ExecutorOutputFormats: []string{"claude"},
 			ManagementAPI:         true,
+			QuotaProvider:         true,
 		},
 	}
 }

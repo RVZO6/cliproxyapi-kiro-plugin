@@ -18,6 +18,7 @@ type registration struct {
 // registrationCapability declares the integration points this plugin implements.
 // Field JSON keys must match the host's rpcCapabilities.
 type registrationCapability struct {
+	QuotaProvider         bool                         `json:"quota_provider,omitempty"`
 	ModelProvider         bool                         `json:"model_provider"`
 	AuthProvider          bool                         `json:"auth_provider"`
 	Executor              bool                         `json:"executor"`
