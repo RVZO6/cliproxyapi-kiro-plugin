@@ -204,3 +204,20 @@ func TestNativeChatOutputPreservesTextToolsAndUsage(t *testing.T) {
 		t.Fatal("native chat returned Claude instead")
 	}
 }
+
+func TestNativeChatStreamLeavesFramingToHost(t *testing.T) {
+	chunks, err := buildOpenAIChatStreamChunks(&kiroExecResult{text: "OK", model: "claude-opus-5-5"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chunks) != 1 || !json.Valid(chunks[0].Payload) {
+		t.Fatalf("host would double-frame payload: %+v", chunks)
+	}
+	var chunk map[string]any
+	if err = json.Unmarshal(chunks[0].Payload, &chunk); err != nil {
+		t.Fatal(err)
+	}
+	if chunk["object"] != "chat.completion.chunk" {
+		t.Fatal("wrong native stream format")
+	}
+}
