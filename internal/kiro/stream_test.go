@@ -25,8 +25,26 @@ func sseData(payload []byte) string {
 	return ""
 }
 
+// Reassemble SSE frames across arbitrary transport chunk boundaries.
+func logicalStreamEvents(t *testing.T, chunks []executorStreamChunk) []executorStreamChunk {
+	t.Helper()
+	var stream strings.Builder
+	for _, chunk := range chunks {
+		stream.Write(chunk.Payload)
+	}
+	payload := stream.String()
+	if !strings.HasSuffix(payload, "\n\n") {
+		t.Fatal("unterminated SSE stream")
+	}
+	var events []executorStreamChunk
+	for _, frame := range strings.Split(strings.TrimSuffix(payload, "\n\n"), "\n\n") {
+		events = append(events, executorStreamChunk{Payload: []byte(frame + "\n\n")})
+	}
+	return events
+}
+
 func TestStreamChunksTextOnly(t *testing.T) {
-	chunks := buildClaudeStreamChunks("Hello world", nil, "claude-sonnet-4-5", 10)
+	chunks := logicalStreamEvents(t, buildClaudeStreamChunks("Hello world", nil, "claude-sonnet-4-5", 10))
 
 	got := make([]string, 0, len(chunks))
 	for _, c := range chunks {
@@ -72,7 +90,7 @@ func TestStreamChunksTextOnly(t *testing.T) {
 
 func TestStreamChunksWithToolUse(t *testing.T) {
 	calls := []toolCall{{id: "t1", name: "get_weather", input: json.RawMessage(`{"city":"NYC"}`)}}
-	chunks := buildClaudeStreamChunks("", calls, "claude-sonnet-4-5", 10)
+	chunks := logicalStreamEvents(t, buildClaudeStreamChunks("", calls, "claude-sonnet-4-5", 10))
 
 	got := make([]string, 0, len(chunks))
 	for _, c := range chunks {

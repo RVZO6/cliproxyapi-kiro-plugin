@@ -16,7 +16,6 @@ const usageRoutePath = "kiro-usage"
 
 const (
 	scopedUsageRoutePath = "plugins/kiro/usage"
-	quotaResourcePath    = "quota"
 )
 
 // managementRoute mirrors pluginapi.ManagementRoute on the wire (PascalCase, no
@@ -62,13 +61,6 @@ func registerManagement() ([]byte, error) {
 				Description: "Report Kiro usage to the plugin resource bridge.",
 			},
 		},
-		Resources: []resourceRoute{
-			{
-				Path:        quotaResourcePath,
-				Menu:        "Kiro Quota",
-				Description: "View Kiro subscription credit usage and reset dates.",
-			},
-		},
 	})
 }
 
@@ -85,9 +77,6 @@ func handleManagement(request []byte) ([]byte, error) {
 	if strings.EqualFold(req.Method, http.MethodGet) &&
 		(strings.HasSuffix(path, usageRoutePath) || strings.HasSuffix(path, scopedUsageRoutePath)) {
 		return wire.OK(handleUsageLimits(req.HostCallbackID, req.Query))
-	}
-	if strings.EqualFold(req.Method, http.MethodGet) && strings.HasSuffix(path, "/"+quotaResourcePath) {
-		return wire.OK(quotaPageResponse())
 	}
 
 	return wire.OK(pluginapi.ManagementResponse{
