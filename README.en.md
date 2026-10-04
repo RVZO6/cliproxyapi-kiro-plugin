@@ -23,10 +23,26 @@ The regression tests cover direct images, image-only/mixed tool results,
 multiple images, invalid sources, duplicate results, and conversation history.
 After installing a rebuilt library, restart CLIProxyAPI to load it.
 
-When account-scoped model discovery is unavailable, Opus 5.5 advertises the
-[documented Kiro 1M context window](https://kiro.dev/docs/models/) rather than
-the generic 200K fallback. Positive account-reported token limits still override
-this fallback. Other models and output limits are unchanged by this patch.
+When account-scoped model discovery is unavailable, the fallback catalog uses
+[documented Kiro context windows](https://kiro.dev/docs/models/): 1M for GPT-5.6
+Sol/Terra/Luna, Opus 4.6/4.7/4.8/5/5.5 and Sonnet 4.6/5; 128K for DeepSeek 3.2;
+256K for Qwen3 Coder Next; 200K for the remaining listed routes. DeepSeek, GLM-5,
+MiniMax M2.1/M2.5 and Qwen3 Coder Next explicitly advertise text-only input.
+Positive account-reported token limits and explicit modalities override these
+fallbacks. Opus 4.8 uses Kiro's documented 128K output; other routes keep the
+conservative 8K output fallback pending Kiro-specific evidence.
+
+Usage accounting is approximate, not exact tokenization or billing. Base64 image
+bytes are excluded from the text estimate (with a 1600-token-per-image heuristic),
+and output tool arguments are included. Tool errors retain their error status.
+Non-streaming OpenAI Responses requests use the SSE intermediate representation
+expected by the host's translator, while Messages/Chat keep Claude JSON.
+
+Remaining transport limitations: upstream generation is buffered before streaming;
+reasoning deltas are not exposed; count-tokens is not implemented; URL images,
+documents and audio are not supported; generation parameters such as max_tokens,
+temperature and reasoning settings are not mapped into CodeWhisperer's private
+request schema. Capability metadata does not enable these unimplemented features.
 
 ```bash
 gofmt -w .

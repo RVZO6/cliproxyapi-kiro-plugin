@@ -34,6 +34,7 @@ type kiroExecResult struct {
 	calls          []toolCall
 	model          string
 	requestPayload []byte
+	sourceFormat   string
 }
 
 // fetchKiroEvents runs the shared request path: build the conversationState
@@ -107,6 +108,7 @@ func fetchKiroEvents(request []byte) (*kiroExecResult, []byte, error) {
 			calls:          calls,
 			model:          model,
 			requestPayload: req.Payload,
+			sourceFormat:   req.SourceFormat,
 		}
 		if strings.TrimSpace(text) != "" || len(calls) > 0 {
 			return lastResult, nil, nil
@@ -130,6 +132,20 @@ func executeKiro(request []byte) ([]byte, error) {
 		return errEnv, nil
 	}
 
+	return renderKiroNonStreamResponse(res)
+}
+
+func renderKiroNonStreamResponse(res *kiroExecResult) ([]byte, error) {
+	// CLIProxyAPI's Claude-to-Responses non-stream translator aggregates SSE,
+	// unlike its Messages/Chat translators which consume a Claude JSON message.
+	// Feed the expected intermediate representation only for Responses clients.
+	if res.sourceFormat == "openai-response" {
+		var payload []byte
+		for _, chunk := range buildClaudeStreamChunks(res.text, res.calls, res.model, estimateRequestTokens(res.requestPayload)) {
+			payload = append(payload, chunk.Payload...)
+		}
+		return wire.OK(pluginapi.ExecutorResponse{Payload: payload, Headers: http.Header{"Content-Type": {"application/json"}}})
+	}
 	message := aggregateToClaudeMessage(res.text, res.calls, res.model, res.requestPayload)
 	payload, errMarshalResp := json.Marshal(message)
 	if errMarshalResp != nil {
@@ -155,7 +171,7 @@ func executeKiroStream(request []byte) ([]byte, error) {
 		return errEnv, nil
 	}
 
-	chunks := buildClaudeStreamChunks(res.text, res.calls, res.model, estimateTokens(len(res.requestPayload)))
+	chunks := buildClaudeStreamChunks(res.text, res.calls, res.model, estimateRequestTokens(res.requestPayload))
 	return wire.OK(executorStreamResponse{
 		Headers: map[string][]string{"Content-Type": {"text/event-stream"}},
 		Chunks:  chunks,

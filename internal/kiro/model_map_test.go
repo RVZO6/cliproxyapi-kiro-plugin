@@ -115,7 +115,7 @@ func TestKiroModelsForAuthDiscoversAvailableModels(t *testing.T) {
 		t.Fatalf("unexpected auto model: %+v", result.Models[1])
 	}
 	qwen := result.Models[2]
-	if qwen.ID != "qwen3-coder-next" || qwen.InputTokenLimit != defaultModelInputTokenLimit ||
+	if qwen.ID != "qwen3-coder-next" || qwen.InputTokenLimit != 256000 ||
 		qwen.OutputTokenLimit != defaultModelOutputTokenLimit {
 		t.Fatalf("unexpected Qwen fallback metadata: %+v", qwen)
 	}
@@ -381,10 +381,7 @@ func TestOpus55FallbackContextLimit(t *testing.T) {
 		}
 	}
 	for _, model := range kiroModels() {
-		want := defaultModelInputTokenLimit
-		if model.ID == "claude-opus-5-5" {
-			want = 1000000
-		}
+		want := fallbackModelInputTokenLimit(model.ID)
 		if model.ContextLength != want || model.InputTokenLimit != want {
 			t.Fatalf("unexpected static context for %q: %+v", model.ID, model)
 		}
@@ -401,5 +398,49 @@ func TestOpus55FallbackContextLimit(t *testing.T) {
 	}
 	if got := fallbackModelInputTokenLimit("unknown-model"); got != defaultModelInputTokenLimit {
 		t.Fatalf("unknown model limit changed: %d", got)
+	}
+}
+
+func TestFallbackCapabilitiesAcrossModels(t *testing.T) {
+	contexts := map[string]int64{
+		"gpt-5.6-sol": 1000000, "gpt-5.6-terra": 1000000, "gpt-5.6-luna": 1000000,
+		"claude-opus-5-5": 1000000, "claude-opus-5": 1000000, "claude-opus-4-8": 1000000,
+		"claude-opus-4-7": 1000000, "claude-opus-4-6": 1000000, "claude-opus-4-5": 200000,
+		"claude-sonnet-5": 1000000, "claude-sonnet-4-6": 1000000, "claude-sonnet-4-5": 200000,
+		"claude-sonnet-4-0": 200000, "claude-haiku-4-5": 200000,
+		"deepseek-3.2": 128000, "minimax-m2.5": 200000, "glm-5": 200000,
+		"minimax-m2.1": 200000, "qwen3-coder-next": 256000,
+	}
+	textOnly := map[string]bool{"deepseek-3.2": true, "glm-5": true, "minimax-m2.1": true, "minimax-m2.5": true, "qwen3-coder-next": true}
+	for _, model := range kiroModels() {
+		t.Run(model.ID, func(t *testing.T) {
+			want, ok := contexts[model.ID]
+			if !ok || model.ContextLength != want || model.InputTokenLimit != want {
+				t.Fatalf("unexpected context: %+v", model)
+			}
+			modalities := "text,image"
+			if textOnly[model.ID] {
+				modalities = "text"
+			}
+			if strings.Join(model.SupportedInputModalities, ",") != modalities {
+				t.Fatalf("unexpected modalities: %+v", model)
+			}
+			if got := fallbackModelInputTokenLimit(resolveKiroModel(model.ID)); got != want {
+				t.Fatalf("native alias has different context: %d", got)
+			}
+			// Discovery metadata remains authoritative, even if it disagrees
+			// with the published fallback (including per-account vision access).
+			got := availableModelsToPluginModels([]availableModel{{ModelID: resolveKiroModel(model.ID), TokenLimits: tokenLimits{MaxInputTokens: 123456, MaxOutputTokens: 23456}, SupportedInputTypes: []string{"TEXT"}}})[0]
+			if got.ContextLength != 123456 || got.OutputTokenLimit != 23456 || strings.Join(got.SupportedInputModalities, ",") != "text" {
+				t.Fatalf("discovery overridden: %+v", got)
+			}
+			fallback := availableModelsToPluginModels([]availableModel{{ModelID: resolveKiroModel(model.ID)}})[0]
+			if fallback.ContextLength != want || strings.Join(fallback.SupportedInputModalities, ",") != modalities {
+				t.Fatalf("missing discovery metadata uses wrong fallback: %+v", fallback)
+			}
+		})
+	}
+	if got := fallbackModelOutputTokenLimit("claude-opus-4.8"); got != 128000 {
+		t.Fatalf("documented output limit not used: %d", got)
 	}
 }
