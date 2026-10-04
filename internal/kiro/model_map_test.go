@@ -257,8 +257,9 @@ func TestKiroModelsForAuthFallsBackToStaticCatalog(t *testing.T) {
 			name:         "builder id: ListAvailableProfiles denied",
 			storage:      `{"accessToken":"test-token","authMethod":"builder-id"}`,
 			profilesResp: &hostapi.HTTPResponse{StatusCode: 400, Body: []byte(`{"__type":"AccessDeniedException","message":"User is not authorized to access this feature."}`)},
+			modelsResp:   &hostapi.HTTPResponse{StatusCode: 400, Body: []byte(`{"__type":"ValidationException","message":"Invalid profileArn."}`)},
 			wantProfiles: true,
-			wantModels:   false,
+			wantModels:   true,
 		},
 		{
 			name:         "discovered profile but models status error",
@@ -338,6 +339,7 @@ func TestKiroModelsForAuthFallsBackToStaticCatalog(t *testing.T) {
 
 func TestClientKiroModelID(t *testing.T) {
 	tests := map[string]string{
+		"claude-opus-5.5":   "claude-opus-5-5",
 		"claude-opus-4.8":   "claude-opus-4-8",
 		"claude-sonnet-4.6": "claude-sonnet-4-6",
 		"claude-sonnet-4":   "claude-sonnet-4",
@@ -348,5 +350,26 @@ func TestClientKiroModelID(t *testing.T) {
 		if got := clientKiroModelID(native); got != want {
 			t.Errorf("clientKiroModelID(%q) = %q, want %q", native, got, want)
 		}
+	}
+}
+
+func TestOpus55CatalogAndRouting(t *testing.T) {
+	const clientID = "claude-opus-5-5"
+	const nativeID = "claude-opus-5.5"
+	if got := resolveKiroModel(clientID); got != nativeID {
+		t.Fatalf("resolveKiroModel(%q) = %q, want %q", clientID, got, nativeID)
+	}
+	var found bool
+	for _, model := range kiroModels() {
+		if model.ID == clientID {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("fallback catalog is missing %q", clientID)
+	}
+	models := availableModelsToPluginModels([]availableModel{{ModelID: nativeID, ModelName: "Claude Opus 5.5"}})
+	if len(models) != 1 || models[0].ID != clientID || models[0].Name != nativeID {
+		t.Fatalf("unexpected discovered Opus 5.5: %+v", models)
 	}
 }
