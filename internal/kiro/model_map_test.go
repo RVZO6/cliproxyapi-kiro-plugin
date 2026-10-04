@@ -373,3 +373,33 @@ func TestOpus55CatalogAndRouting(t *testing.T) {
 		t.Fatalf("unexpected discovered Opus 5.5: %+v", models)
 	}
 }
+
+func TestOpus55FallbackContextLimit(t *testing.T) {
+	for _, id := range []string{"claude-opus-5-5", "claude-opus-5.5"} {
+		if got := fallbackModelInputTokenLimit(id); got != 1000000 {
+			t.Fatalf("fallback limit for %q = %d, want 1000000", id, got)
+		}
+	}
+	for _, model := range kiroModels() {
+		want := defaultModelInputTokenLimit
+		if model.ID == "claude-opus-5-5" {
+			want = 1000000
+		}
+		if model.ContextLength != want || model.InputTokenLimit != want {
+			t.Fatalf("unexpected static context for %q: %+v", model.ID, model)
+		}
+	}
+	for _, limit := range []int64{0, -1, 200000, 750000, 1000000} {
+		models := availableModelsToPluginModels([]availableModel{{ModelID: "claude-opus-5.5", TokenLimits: tokenLimits{MaxInputTokens: limit, MaxOutputTokens: 12345}}})
+		want := limit
+		if want <= 0 {
+			want = 1000000
+		}
+		if len(models) != 1 || models[0].InputTokenLimit != want || models[0].ContextLength != want || models[0].OutputTokenLimit != 12345 {
+			t.Fatalf("account limit %d not respected: %+v", limit, models)
+		}
+	}
+	if got := fallbackModelInputTokenLimit("unknown-model"); got != defaultModelInputTokenLimit {
+		t.Fatalf("unknown model limit changed: %d", got)
+	}
+}
