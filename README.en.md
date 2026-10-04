@@ -19,6 +19,17 @@ CodeWhisperer user message's `images` array. Tool-result text and call IDs are
 preserved; images remain attached to their original conversation turn, including
 history. Only inline base64 sources are supported; URL-only images are not fetched.
 
+Before transmission, the entire request (including historical tool screenshots)
+is counted and normalized using [Claude's documented vision limits](https://platform.claude.com/docs/en/build-with-claude/vision).
+Requests with more than 20 images use a 2000-pixel maximum edge; smaller requests
+retain resolution up to 8000 pixels. Images exceeding a conservative 5 MiB
+base64 partner-transport budget are downscaled further. Resizing preserves aspect
+ratio and uses PNG; it never upscales, drops images, or modifies stored originals.
+Decoding is bounded to 64 megapixels and 16 MiB input base64 per image; unsafe or
+invalid images return a local 400 instead of an opaque upstream failure. Identical
+images are normalized once per request and reused across retries. This does not
+assert Kiro's image-count or total-payload limits match the public Claude API.
+
 The regression tests cover direct images, image-only/mixed tool results,
 multiple images, invalid sources, duplicate results, and conversation history.
 After installing a rebuilt library, restart CLIProxyAPI to load it.

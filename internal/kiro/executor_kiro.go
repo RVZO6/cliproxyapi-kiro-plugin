@@ -76,10 +76,18 @@ func fetchKiroEvents(request []byte) (*kiroExecResult, []byte, error) {
 		return nil, wire.ErrorStatus("invalid_credential", "invalid kiro endpoint: "+errURL.Error(), http.StatusBadRequest), nil
 	}
 
+	// Normalize once; retries reuse the safe images but get fresh conversation IDs.
+	cwReq, maps := buildCodeWhispererRequest(creq, model, cred)
+	if err := normalizeCWImages(cwReq); err != nil {
+		return nil, wire.ErrorStatus("invalid_image", err.Error(), http.StatusBadRequest), nil
+	}
 	var lastResult *kiroExecResult
 	for attempt := 0; attempt < maxEmptyResponseAttempts; attempt++ {
 		// Rebuild each attempt so a retry carries a fresh conversationId.
-		cwReq, maps := buildCodeWhispererRequest(creq, model, cred)
+		if attempt > 0 {
+			fresh, _ := buildCodeWhispererRequest(creq, model, cred)
+			cwReq.ConversationState.ConversationID = fresh.ConversationState.ConversationID
+		}
 		cwBody, errMarshal := json.Marshal(cwReq)
 		if errMarshal != nil {
 			return nil, nil, fmt.Errorf("encode codewhisperer request: %w", errMarshal)
