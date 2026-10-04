@@ -105,3 +105,39 @@ func TestFetchKiroEventsStopsAfterEmptyResponseLimit(t *testing.T) {
 		t.Fatalf("expected final empty result, got %+v", result)
 	}
 }
+
+func TestNonStreamResponseUsesClientProtocolRepresentation(t *testing.T) {
+	for _, format := range []string{"claude", "openai", "openai-response", ""} {
+		t.Run(format, func(t *testing.T) {
+			res := &kiroExecResult{text: "hello", calls: []toolCall{{id: "call", name: "read_file", input: json.RawMessage(`{"path":"x"}`)}}, model: "claude-sonnet-4-6", sourceFormat: format, requestPayload: []byte(`{"messages":[]}`)}
+			raw, err := renderKiroNonStreamResponse(res)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var envelope struct {
+				OK     bool                       `json:"ok"`
+				Result pluginapi.ExecutorResponse `json:"result"`
+			}
+			if err := json.Unmarshal(raw, &envelope); err != nil {
+				t.Fatal(err)
+			}
+			if !envelope.OK {
+				t.Fatalf("error envelope: %s", raw)
+			}
+			if format == "openai-response" {
+				events := logicalStreamEvents(t, []executorStreamChunk{{Payload: envelope.Result.Payload}})
+				if len(events) != 9 || sseEventType(events[0].Payload) != "message_start" || sseEventType(events[len(events)-1].Payload) != "message_stop" {
+					t.Fatalf("incomplete Responses intermediate stream: %s", envelope.Result.Payload)
+				}
+			} else {
+				var message claudeResponse
+				if err := json.Unmarshal(envelope.Result.Payload, &message); err != nil {
+					t.Fatal(err)
+				}
+				if len(message.Content) != 2 || message.StopReason != "tool_use" {
+					t.Fatalf("JSON response changed: %+v", message)
+				}
+			}
+		})
+	}
+}

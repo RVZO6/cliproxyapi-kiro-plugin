@@ -127,10 +127,57 @@ func aggregateToClaudeMessage(text string, calls []toolCall, model string, reque
 		Content:    content,
 		StopReason: stopReason,
 		Usage: claudeUsage{
-			InputTokens:  estimateTokens(len(requestPayload)),
-			OutputTokens: estimateTokens(len(text)),
+			InputTokens:  estimateRequestTokens(requestPayload),
+			OutputTokens: estimateOutputTokens(text, calls),
 		},
 	}
+}
+
+// estimateRequestTokens is approximate, not a provider tokenizer. Inline image
+// encodings are transport bytes, not text tokens. Replace them before applying
+// the byte heuristic and budget 1600 tokens per transmitted image; actual image
+// costs vary by model/resolution. Never mutate the upstream request payload.
+func estimateRequestTokens(payload []byte) int {
+	var value any
+	if json.Unmarshal(payload, &value) != nil {
+		return estimateTokens(len(payload))
+	}
+	images := 0
+	var stripImages func(any)
+	stripImages = func(v any) {
+		switch v := v.(type) {
+		case map[string]any:
+			if v["type"] == "image" {
+				if source, ok := v["source"].(map[string]any); ok {
+					if data, ok := source["data"].(string); ok && strings.TrimSpace(data) != "" {
+						images++
+						delete(source, "data")
+					}
+				}
+			}
+			for _, child := range v {
+				stripImages(child)
+			}
+		case []any:
+			for _, child := range v {
+				stripImages(child)
+			}
+		}
+	}
+	stripImages(value)
+	textPayload, err := json.Marshal(value)
+	if err != nil {
+		return estimateTokens(len(payload))
+	}
+	return estimateTokens(len(textPayload)) + images*1600
+}
+
+func estimateOutputTokens(text string, calls []toolCall) int {
+	bytes := len(text)
+	for _, call := range calls {
+		bytes += len(call.name) + len(call.input)
+	}
+	return estimateTokens(bytes)
 }
 
 // parseToolInput turns accumulated input text into a JSON value; invalid or

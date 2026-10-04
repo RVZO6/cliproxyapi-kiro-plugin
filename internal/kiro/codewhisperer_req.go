@@ -37,6 +37,7 @@ type claudeBlock struct {
 	ToolUseID string             `json:"tool_use_id"`
 	Content   json.RawMessage    `json:"content"`
 	Thinking  string             `json:"thinking"`
+	IsError   bool               `json:"is_error,omitempty"`
 	Source    *claudeImageSource `json:"source"`
 }
 
@@ -346,7 +347,7 @@ func buildUserInputMessage(blocks []claudeBlock, model string, maps *toolNameMap
 			}
 			toolResults = append(toolResults, cwToolResult{
 				Content:   []cwTextContent{{Text: contentToText(b.Content)}},
-				Status:    "success",
+				Status:    toolResultStatus(b.IsError),
 				ToolUseID: b.ToolUseID,
 			})
 		case "image":
@@ -374,6 +375,13 @@ func buildUserInputMessage(blocks []claudeBlock, model string, maps *toolNameMap
 		}
 	}
 	return uim
+}
+
+func toolResultStatus(isError bool) string {
+	if isError {
+		return "error"
+	}
+	return "success"
 }
 
 // toCWImage converts a Claude base64 image source into a CodeWhisperer image.

@@ -105,10 +105,39 @@ func clientKiroModelID(id string) string {
 // default; positive account-reported limits always take precedence.
 func fallbackModelInputTokenLimit(id string) int64 {
 	// https://kiro.dev/docs/models/ (verified 2026-10-04).
-	if clientKiroModelID(id) == "claude-opus-5-5" {
+	switch clientKiroModelID(id) {
+	case "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+		"claude-opus-5-5", "claude-opus-5", "claude-opus-4-8",
+		"claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-5", "claude-sonnet-4-6":
 		return 1000000
+	case "deepseek-3.2":
+		return 128000
+	case "qwen3-coder-next":
+		return 256000
 	}
 	return defaultModelInputTokenLimit
+}
+
+func fallbackModelOutputTokenLimit(id string) int64 {
+	// Kiro explicitly documents 128K output for Opus 4.8. Do not infer other
+	// routes' output limits from their vendors' direct API specifications.
+	if clientKiroModelID(id) == "claude-opus-4-8" {
+		return 128000
+	}
+	return defaultModelOutputTokenLimit
+}
+
+func fallbackModelInputModalities(id string) []string {
+	switch clientKiroModelID(id) {
+	case "deepseek-3.2", "glm-5", "minimax-m2.1", "minimax-m2.5", "qwen3-coder-next":
+		return []string{"text"}
+	case "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
+		"claude-opus-5-5", "claude-opus-5", "claude-opus-4-8", "claude-opus-4-7",
+		"claude-opus-4-6", "claude-opus-4-5", "claude-sonnet-5", "claude-sonnet-4-6",
+		"claude-sonnet-4-5", "claude-sonnet-4-0", "claude-haiku-4-5":
+		return []string{"text", "image"}
+	}
+	return nil // Unknown routes retain host defaults until discovery supplies data.
 }
 
 // kiroModels builds the ModelInfo list advertised to the host registry. It is
@@ -127,9 +156,10 @@ func kiroModels() []pluginapi.ModelInfo {
 			Name:                       id,
 			SupportedGenerationMethods: []string{"generateContent"},
 			InputTokenLimit:            inputLimit,
-			OutputTokenLimit:           defaultModelOutputTokenLimit,
+			OutputTokenLimit:           fallbackModelOutputTokenLimit(id),
 			ContextLength:              inputLimit,
-			MaxCompletionTokens:        defaultModelOutputTokenLimit,
+			MaxCompletionTokens:        fallbackModelOutputTokenLimit(id),
+			SupportedInputModalities:   fallbackModelInputModalities(id),
 		})
 	}
 	return models
@@ -340,7 +370,11 @@ func availableModelsToPluginModels(available []availableModel) []pluginapi.Model
 		}
 		outputLimit := item.TokenLimits.MaxOutputTokens
 		if outputLimit <= 0 {
-			outputLimit = defaultModelOutputTokenLimit
+			outputLimit = fallbackModelOutputTokenLimit(clientID)
+		}
+		modalities := normalizeInputModalities(item.SupportedInputTypes)
+		if len(modalities) == 0 {
+			modalities = fallbackModelInputModalities(clientID)
 		}
 		displayName := strings.TrimSpace(item.ModelName)
 		if displayName == "" {
@@ -360,7 +394,7 @@ func availableModelsToPluginModels(available []availableModel) []pluginapi.Model
 			OutputTokenLimit:           outputLimit,
 			ContextLength:              inputLimit,
 			MaxCompletionTokens:        outputLimit,
-			SupportedInputModalities:   normalizeInputModalities(item.SupportedInputTypes),
+			SupportedInputModalities:   modalities,
 		})
 	}
 	return models

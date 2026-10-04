@@ -241,3 +241,19 @@ func TestBuildToolResultImagesDedupAndDirectImage(t *testing.T) {
 		t.Fatalf("dedup policy changed: %+v", results)
 	}
 }
+
+func TestToolResultErrorStatusAndImagesAcrossModels(t *testing.T) {
+	for _, id := range kiroModelIDs {
+		t.Run(id, func(t *testing.T) {
+			payload := `{"model":"` + id + `","messages":[{"role":"user","content":[{"type":"tool_result","tool_use_id":"capture","is_error":true,"content":[{"type":"text","text":"capture failed"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"cG5n"}}]}]}]}`
+			cur := buildFromJSON(t, payload, kiroCredential{}).ConversationState.CurrentMessage.UserInputMessage
+			if cur.ModelID != resolveKiroModel(id) || len(cur.Images) != 1 || cur.Images[0].Source.Bytes != "cG5n" {
+				t.Fatalf("shared conversion differs by model: %+v", cur)
+			}
+			result := cur.UserInputMessageContext.ToolResults[0]
+			if result.Status != "error" || result.Content[0].Text != "capture failed" || result.ToolUseID != "capture" {
+				t.Fatalf("error incorrectly reported as success: %+v", result)
+			}
+		})
+	}
+}
