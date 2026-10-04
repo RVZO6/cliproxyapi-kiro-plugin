@@ -195,16 +195,25 @@ func executeKiroStream(request []byte) ([]byte, error) {
 
 	chunks := buildClaudeStreamChunks(res.text, res.calls, res.model, estimateRequestTokens(res.requestPayload))
 	if res.outputFormat == "openai" {
-		payload, err := json.Marshal(buildOpenAIChatResponse(res, true))
+		var err error
+		chunks, err = buildOpenAIChatStreamChunks(res)
 		if err != nil {
 			return nil, err
 		}
-		chunks = []executorStreamChunk{{Payload: append(append([]byte("data: "), payload...), []byte("\n\n")...)}, {Payload: []byte("data: [DONE]\n\n")}}
 	}
 	return wire.OK(executorStreamResponse{
 		Headers: map[string][]string{"Content-Type": {"text/event-stream"}},
 		Chunks:  chunks,
 	})
+}
+
+func buildOpenAIChatStreamChunks(res *kiroExecResult) ([]executorStreamChunk, error) {
+	payload, err := json.Marshal(buildOpenAIChatResponse(res, true))
+	if err != nil {
+		return nil, err
+	}
+	// The host's Chat handler owns SSE framing and the terminal [DONE] marker.
+	return []executorStreamChunk{{Payload: payload}}, nil
 }
 
 // Chat receives native output so the host need not guess whether a native
