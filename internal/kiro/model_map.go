@@ -100,12 +100,24 @@ func clientKiroModelID(id string) string {
 	return id
 }
 
+// fallbackModelInputTokenLimit applies documented Kiro limits when account
+// discovery fails or omits token limits. Unknown models retain the conservative
+// default; positive account-reported limits always take precedence.
+func fallbackModelInputTokenLimit(id string) int64 {
+	// https://kiro.dev/docs/models/ (verified 2026-10-04).
+	if clientKiroModelID(id) == "claude-opus-5-5" {
+		return 1000000
+	}
+	return defaultModelInputTokenLimit
+}
+
 // kiroModels builds the ModelInfo list advertised to the host registry. It is
 // retained for static compatibility, while model.for_auth uses the account's
 // management response below.
 func kiroModels() []pluginapi.ModelInfo {
 	models := make([]pluginapi.ModelInfo, 0, len(kiroModelIDs))
 	for _, id := range kiroModelIDs {
+		inputLimit := fallbackModelInputTokenLimit(id)
 		models = append(models, pluginapi.ModelInfo{
 			ID:                         id,
 			Object:                     "model",
@@ -114,9 +126,9 @@ func kiroModels() []pluginapi.ModelInfo {
 			DisplayName:                id,
 			Name:                       id,
 			SupportedGenerationMethods: []string{"generateContent"},
-			InputTokenLimit:            defaultModelInputTokenLimit,
+			InputTokenLimit:            inputLimit,
 			OutputTokenLimit:           defaultModelOutputTokenLimit,
-			ContextLength:              defaultModelInputTokenLimit,
+			ContextLength:              inputLimit,
 			MaxCompletionTokens:        defaultModelOutputTokenLimit,
 		})
 	}
@@ -324,7 +336,7 @@ func availableModelsToPluginModels(available []availableModel) []pluginapi.Model
 
 		inputLimit := item.TokenLimits.MaxInputTokens
 		if inputLimit <= 0 {
-			inputLimit = defaultModelInputTokenLimit
+			inputLimit = fallbackModelInputTokenLimit(clientID)
 		}
 		outputLimit := item.TokenLimits.MaxOutputTokens
 		if outputLimit <= 0 {
