@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/pluginapi"
 
@@ -35,6 +36,7 @@ type kiroExecResult struct {
 	model          string
 	requestPayload []byte
 	sourceFormat   string
+	outputFormat   string
 }
 
 // fetchKiroEvents runs the shared request path: build the conversationState
@@ -109,6 +111,7 @@ func fetchKiroEvents(request []byte) (*kiroExecResult, []byte, error) {
 			model:          model,
 			requestPayload: req.Payload,
 			sourceFormat:   originalClientFormat(req),
+			outputFormat:   req.Format,
 		}
 		if strings.TrimSpace(text) != "" || len(calls) > 0 {
 			return lastResult, nil, nil
@@ -148,6 +151,13 @@ func executeKiro(request []byte) ([]byte, error) {
 }
 
 func renderKiroNonStreamResponse(res *kiroExecResult) ([]byte, error) {
+	if res.outputFormat == "openai" {
+		payload, err := json.Marshal(buildOpenAIChatResponse(res, false))
+		if err != nil {
+			return nil, err
+		}
+		return wire.OK(pluginapi.ExecutorResponse{Payload: payload, Headers: http.Header{"Content-Type": {"application/json"}}})
+	}
 	// CLIProxyAPI's Claude-to-Responses non-stream translator aggregates SSE,
 	// unlike its Messages/Chat translators which consume a Claude JSON message.
 	// Feed the expected intermediate representation only for Responses clients.
@@ -184,10 +194,47 @@ func executeKiroStream(request []byte) ([]byte, error) {
 	}
 
 	chunks := buildClaudeStreamChunks(res.text, res.calls, res.model, estimateRequestTokens(res.requestPayload))
+	if res.outputFormat == "openai" {
+		payload, err := json.Marshal(buildOpenAIChatResponse(res, true))
+		if err != nil {
+			return nil, err
+		}
+		chunks = []executorStreamChunk{{Payload: append(append([]byte("data: "), payload...), []byte("\n\n")...)}, {Payload: []byte("data: [DONE]\n\n")}}
+	}
 	return wire.OK(executorStreamResponse{
 		Headers: map[string][]string{"Content-Type": {"text/event-stream"}},
 		Chunks:  chunks,
 	})
+}
+
+// Chat receives native output so the host need not guess whether a native
+// Claude JSON response or an aggregated Claude SSE buffer was returned.
+func buildOpenAIChatResponse(res *kiroExecResult, stream bool) map[string]any {
+	message := map[string]any{"role": "assistant", "content": res.text}
+	finish := "stop"
+	if len(res.calls) > 0 {
+		finish = "tool_calls"
+		calls := make([]any, 0, len(res.calls))
+		for i, call := range res.calls {
+			item := map[string]any{"id": call.id, "type": "function", "function": map[string]any{"name": call.name, "arguments": string(call.input)}}
+			if stream {
+				item["index"] = i
+			}
+			calls = append(calls, item)
+		}
+		message["tool_calls"] = calls
+	}
+	input := estimateRequestTokens(res.requestPayload)
+	output := estimateOutputTokens(res.text, res.calls)
+	key, object := "message", "chat.completion"
+	if stream {
+		key, object = "delta", "chat.completion.chunk"
+	}
+	return map[string]any{
+		"id": randomMessageID(), "object": object, "created": time.Now().Unix(), "model": res.model,
+		"choices": []any{map[string]any{"index": 0, key: message, "finish_reason": finish}},
+		"usage":   map[string]any{"prompt_tokens": input, "completion_tokens": output, "total_tokens": input + output},
+	}
 }
 
 // kiroRequestHeaders builds the AWS/KiroIDE headers required by CodeWhisperer.

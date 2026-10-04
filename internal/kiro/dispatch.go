@@ -92,7 +92,7 @@ func kiroRegistration() registration {
 			Executor:              true,
 			ExecutorModelScope:    pluginapi.ExecutorModelScopeOAuth,
 			ExecutorInputFormats:  []string{"claude"},
-			ExecutorOutputFormats: []string{"claude"},
+			ExecutorOutputFormats: []string{"claude", "openai"},
 			ManagementAPI:         true,
 			QuotaProvider:         true,
 		},

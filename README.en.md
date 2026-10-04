@@ -36,7 +36,10 @@ Usage accounting is approximate, not exact tokenization or billing. Base64 image
 bytes are excluded from the text estimate (with a 1600-token-per-image heuristic),
 and output tool arguments are included. Tool errors retain their error status.
 Non-streaming OpenAI Responses requests use the SSE intermediate representation
-expected by the host's translator, while Messages/Chat keep Claude JSON.
+expected by the host's translator, identified from the original client envelope
+because the host rewrites SourceFormat. Chat uses native OpenAI output (both
+streaming and non-streaming); Messages keeps Claude JSON. This avoids silent
+empty responses from host translators that expect an SSE buffer.
 
 Remaining transport limitations: upstream generation is buffered before streaming;
 reasoning deltas are not exposed; count-tokens is not implemented; URL images,
