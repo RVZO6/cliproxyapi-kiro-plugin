@@ -141,3 +141,19 @@ func TestNonStreamResponseUsesClientProtocolRepresentation(t *testing.T) {
 		})
 	}
 }
+
+func TestOriginalClientFormatSurvivesHostNativeRewrite(t *testing.T) {
+	for _, tc := range []struct{ original, source, want string }{
+		{`{"input":"hi"}`, "claude", "openai-response"},
+		{`{"input":[]}`, "claude", "openai-response"},
+		{`{"messages":[]}`, "claude", "claude"},
+		{`{"messages":[]}`, "openai", "openai"},
+		{"", "openai-response", "openai-response"},
+		{"invalid", "claude", "claude"},
+	} {
+		req := executorRequest{ExecutorRequest: pluginapi.ExecutorRequest{SourceFormat: tc.source, OriginalRequest: []byte(tc.original)}}
+		if got := originalClientFormat(req); got != tc.want {
+			t.Fatalf("original=%q source=%q: got %q want %q", tc.original, tc.source, got, tc.want)
+		}
+	}
+}

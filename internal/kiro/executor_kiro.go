@@ -108,7 +108,7 @@ func fetchKiroEvents(request []byte) (*kiroExecResult, []byte, error) {
 			calls:          calls,
 			model:          model,
 			requestPayload: req.Payload,
-			sourceFormat:   req.SourceFormat,
+			sourceFormat:   originalClientFormat(req),
 		}
 		if strings.TrimSpace(text) != "" || len(calls) > 0 {
 			return lastResult, nil, nil
@@ -120,6 +120,18 @@ func fetchKiroEvents(request []byte) (*kiroExecResult, []byte, error) {
 	// receives a valid, empty message rather than an error that would penalize
 	// the credential.
 	return lastResult, nil, nil
+}
+
+func originalClientFormat(req executorRequest) string {
+	// The host rewrites SourceFormat to the plugin's native input format
+	// during preparation. OriginalRequest retains the actual client envelope.
+	var original map[string]json.RawMessage
+	if json.Unmarshal(req.OriginalRequest, &original) == nil {
+		if _, responses := original["input"]; responses {
+			return "openai-response"
+		}
+	}
+	return req.SourceFormat
 }
 
 // executeKiro handles a non-streaming request and returns an aggregated message.
