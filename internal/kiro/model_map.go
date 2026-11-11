@@ -32,11 +32,14 @@ var kiroModelIDs = []string{
 	"claude-opus-4-7",
 	"claude-opus-4-6",
 	"claude-opus-4-5",
+	"claude-sonnet-5-5",
 	"claude-sonnet-5",
 	"claude-sonnet-4-6",
 	"claude-sonnet-4-5",
 	"claude-sonnet-4-0",
+	"claude-haiku-5-5",
 	"claude-haiku-4-5",
+	"kimi-k3",
 	"deepseek-3.2",
 	"minimax-m2.5",
 	"glm-5",
@@ -53,6 +56,8 @@ var kiroModelIDs = []string{
 // model (INVALID_MODEL_ID) according to the account's plan/tier. The plugin must
 // not pre-assume any account's capabilities.
 var modelMapping = map[string]string{
+	"claude-sonnet-5-5": "claude-sonnet-5.5",
+	"claude-haiku-5-5":  "claude-haiku-5.5",
 	"claude-opus-5-5":   "claude-opus-5.5",
 	"claude-opus-5":     "claude-opus-5",
 	"claude-opus-4-8":   "claude-opus-4.8",
@@ -69,6 +74,8 @@ var modelMapping = map[string]string{
 // nativeModelMapping keeps the public client ID stable while preserving the
 // native dotted ID returned by Kiro in ModelInfo.Name.
 var nativeModelMapping = map[string]string{
+	"claude-sonnet-5.5": "claude-sonnet-5-5",
+	"claude-haiku-5.5":  "claude-haiku-5-5",
 	"claude-opus-5.5":   "claude-opus-5-5",
 	"claude-opus-5":     "claude-opus-5",
 	"claude-opus-4.8":   "claude-opus-4-8",
@@ -104,11 +111,12 @@ func clientKiroModelID(id string) string {
 // discovery fails or omits token limits. Unknown models retain the conservative
 // default; positive account-reported limits always take precedence.
 func fallbackModelInputTokenLimit(id string) int64 {
-	// https://kiro.dev/docs/models/ (verified 2026-10-04).
+	// https://kiro.dev/docs/models/available-models/
 	switch clientKiroModelID(id) {
 	case "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
 		"claude-opus-5-5", "claude-opus-5", "claude-opus-4-8",
-		"claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-5", "claude-sonnet-4-6":
+		"claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-5", "claude-sonnet-4-6",
+		"claude-sonnet-5-5", "claude-haiku-5-5", "kimi-k3":
 		return 1000000
 	case "deepseek-3.2":
 		return 128000
@@ -134,7 +142,8 @@ func fallbackModelInputModalities(id string) []string {
 	case "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna",
 		"claude-opus-5-5", "claude-opus-5", "claude-opus-4-8", "claude-opus-4-7",
 		"claude-opus-4-6", "claude-opus-4-5", "claude-sonnet-5", "claude-sonnet-4-6",
-		"claude-sonnet-4-5", "claude-sonnet-4-0", "claude-haiku-4-5":
+		"claude-sonnet-4-5", "claude-sonnet-4-0", "claude-haiku-4-5",
+		"claude-sonnet-5-5", "claude-haiku-5-5", "kimi-k3":
 		return []string{"text", "image"}
 	}
 	return nil // Unknown routes retain host defaults until discovery supplies data.

@@ -36,12 +36,17 @@ After installing a rebuilt library, restart CLIProxyAPI to load it.
 
 When account-scoped model discovery is unavailable, the fallback catalog uses
 [documented Kiro context windows](https://kiro.dev/docs/models/): 1M for GPT-5.6
-Sol/Terra/Luna, Opus 4.6/4.7/4.8/5/5.5 and Sonnet 4.6/5; 128K for DeepSeek 3.2;
+Sol/Terra/Luna, Opus 4.6/4.7/4.8/5/5.5 and Sonnet 4.6/5/5.5, Haiku 5.5, and Kimi K3; 128K for DeepSeek 3.2;
 256K for Qwen3 Coder Next; 200K for the remaining listed routes. DeepSeek, GLM-5,
 MiniMax M2.1/M2.5 and Qwen3 Coder Next explicitly advertise text-only input.
 Positive account-reported token limits and explicit modalities override these
 fallbacks. Opus 4.8 uses Kiro's documented 128K output; other routes keep the
 conservative 8K output fallback pending Kiro-specific evidence.
+
+GPT-6.x models are not in Kiro's documented catalog. Do not add speculative
+GPT-6.x aliases to the Kiro fallback list; use a provider that supports them.
+Enterprise-only models such as Fable 5.1 remain available through account
+model discovery, not the general fallback list.
 
 Usage accounting is approximate, not exact tokenization or billing. Base64 image
 bytes are excluded from the text estimate (with a 1600-token-per-image heuristic),

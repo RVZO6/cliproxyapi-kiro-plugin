@@ -403,6 +403,7 @@ func TestOpus55FallbackContextLimit(t *testing.T) {
 
 func TestFallbackCapabilitiesAcrossModels(t *testing.T) {
 	contexts := map[string]int64{
+		"claude-sonnet-5-5": 1000000, "claude-haiku-5-5": 1000000, "kimi-k3": 1000000,
 		"gpt-5.6-sol": 1000000, "gpt-5.6-terra": 1000000, "gpt-5.6-luna": 1000000,
 		"claude-opus-5-5": 1000000, "claude-opus-5": 1000000, "claude-opus-4-8": 1000000,
 		"claude-opus-4-7": 1000000, "claude-opus-4-6": 1000000, "claude-opus-4-5": 200000,
@@ -442,5 +443,31 @@ func TestFallbackCapabilitiesAcrossModels(t *testing.T) {
 	}
 	if got := fallbackModelOutputTokenLimit("claude-opus-4.8"); got != 128000 {
 		t.Fatalf("documented output limit not used: %d", got)
+	}
+}
+
+func TestLatestFallbackModels(t *testing.T) {
+	for _, id := range []string{"claude-sonnet-5-5", "claude-haiku-5-5", "kimi-k3"} {
+		t.Run(id, func(t *testing.T) {
+			found := false
+			for _, model := range kiroModels() {
+				if model.ID == id {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("fallback catalog is missing %q", id)
+			}
+			native := resolveKiroModel(id)
+			models := availableModelsToPluginModels([]availableModel{{ModelID: native}})
+			if len(models) != 1 || models[0].ID != id || models[0].Name != native {
+				t.Fatalf("discovery and routing disagree: %+v", models)
+			}
+		})
+	}
+	for _, model := range kiroModels() {
+		if strings.HasPrefix(model.ID, "gpt-6") {
+			t.Fatalf("do not advertise unsupported GPT-6.x models through Kiro: %q", model.ID)
+		}
 	}
 }
